@@ -9,7 +9,8 @@ class Handlers:
         self.init_api()
 
     def init_api(self):
-        def create_plugin(uri):
+        def create_plugin(msg):
+            uri = msg[1]
             plug = self.spoon.plugins.get(uri, None)
             if plug != None:
                 self.spoon.application.browser.load_item(plug)
