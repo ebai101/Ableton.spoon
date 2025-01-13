@@ -17,7 +17,7 @@ send_packet() {
 }
 
 ableton_logs() {
-    tail -f ~/Library/Preferences/Ableton/Live\ 12.1.5/Log.txt
+    less ~/Library/Preferences/Ableton/Live\ 12.1.5/Log.txt
 }
 
 remote_logs() {
