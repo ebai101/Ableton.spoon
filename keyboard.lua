@@ -69,8 +69,8 @@ end
 
 function keyboard:browser(m)
     return hs.hotkey.new(m.browser[1], m.browser[2], function()
-        keyboard.socket:send('toggle_browser', '0.0.0.0', 42069)
-        -- keyboard.app:selectMenuItem({ 'View', 'Browser' })
+        -- keyboard.socket:send('toggle_browser', '0.0.0.0', 42069)
+        keyboard.app:selectMenuItem({ 'View', 'Browser' })
     end)
 end
 
