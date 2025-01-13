@@ -1,3 +1,5 @@
+from __future__ import absolute_import, print_function, unicode_literals
+
 import logging
 
 
@@ -11,9 +13,9 @@ class Handlers:
     def init_api(self):
         def create_plugin(msg):
             uri = msg[1]
-            plug = self.spoon.plugins.get(uri, None)
+            plug = self.spoon.devices.get(uri, None)
             if plug != None:
-                self.spoon.application.browser.load_item(plug)
+                self.spoon.application.browser.load_item(plug[0])
 
         def toggle_browser():
             app = self.spoon.application

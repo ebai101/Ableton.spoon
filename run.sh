@@ -4,11 +4,6 @@ run_remote() {
     rm -rf ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote
     cp -r remote ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote
     open -a "Ableton Live 12 Suite"
-
-    until [ -f ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote/logs/remote.log ]; do 
-        sleep 1
-    done
-    tail -f ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote/logs/remote.log
 }
 
 send_packet() {
@@ -16,11 +11,22 @@ send_packet() {
     echo "$@" | nc -u -w 0 0.0.0.0 42069
 }
 
-ableton_logs() {
+tail_ableton_log() {
+    tail -f ~/Library/Preferences/Ableton/Live\ 12.1.5/Log.txt
+}
+
+tail_remote_log() {
+    until [ -f ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote/logs/remote.log ]; do 
+        sleep 1
+    done
+    tail -f ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote/logs/remote.log
+}
+
+less_ableton_log() {
     less ~/Library/Preferences/Ableton/Live\ 12.1.5/Log.txt
 }
 
-remote_logs() {
+less_remote_log() {
     less ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote/logs/remote.log
 }
 
@@ -28,13 +34,21 @@ case "$1" in
     "send")
         send_packet "$@"
         ;;
-    "ableton_logs")
-        ableton_logs
+    "ableton_log")
+        less_ableton_log
         ;;
-    "remote_logs")
-        remote_logs
+    "remote_log")
+        less_remote_log
+        ;;
+    "remote")
+        run_remote
+        tail_remote_log
+        ;;
+    "ableton")
+        run_remote
+        tail_ableton_log
         ;;
     *)
-        run_remote
+        echo "options: send, ableton_log, remote_log, remote, ableton"
         ;;
 esac

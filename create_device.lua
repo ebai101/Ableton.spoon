@@ -2,20 +2,34 @@ local createDevice = {}
 local log = hs.logger.new('createDev', 'debug')
 
 createDevice.hotkeys = {}
-createDevice.dataFile = '~/Music/Ableton/User Library/Remote Scripts/AAAremote/data/plugins.json'
-createDevice.freqFile = 'abcd_freq.json'
+createDevice.dataFile = '~/Music/Ableton/User Library/Remote Scripts/AAAremote/data/devices.json'
+createDevice.freqFile = 'abcd_freq_data.db'
 
 -----------
 -- setup --
 -----------
 
 function createDevice:start()
-    createDevice.deviceData = hs.json.read(createDevice.dataFile)
-    createDevice.freqData = hs.json.read(createDevice.freqFile)
+    createDevice.db = hs.sqlite3.open(createDevice.freqFile)
+    local res = createDevice.db:exec [=[
+        create table if not exists devices (
+            id integer primary key,
+            uri text unique not null,
+            chooser_text text not null,
+            chooser_subtext text,
+            freq integer default 0
+        )
+    ]=]
+    if res ~= hs.sqlite3.OK then
+        print('error creating table: ' .. createDevice.db:errmsg())
+    end
+
     createDevice.chooser = hs.chooser.new(function(choice)
         return createDevice:select(choice)
     end)
     createDevice.socket = hs.socket.udp.new()
+
+    createDevice:refresh()
 end
 
 function createDevice:bindHotkeys(maps)
@@ -41,10 +55,9 @@ end
 -- If the device chooser is already active (double press) then it calls createDevice:refresh()
 function createDevice:show()
     if createDevice.chooser:isVisible() then
-        createDevice:refresh()
-        hs.alert('refreshed device list')
+        createDevice:buildList()
+        hs.alert('rebuilt device list')
     else
-        createDevice.chooser:choices(createDevice.deviceData)
         createDevice.chooser:show()
     end
 end
@@ -62,13 +75,16 @@ function createDevice:select(choice)
     log.d(string.format('selected %s', choice['text']))
     createDevice.socket:send(string.format('create_plugin %s', choice['uri']), '0.0.0.0', 42069)
 
-    if createDevice.freqData[choice['text']] == nil then
-        createDevice.freqData[choice['text']] = 0
-    else
-        createDevice.freqData[choice['text']] = createDevice.freqData[choice['text']] + 1
+
+    local err = createDevice.db:exec(string.format([[
+        update devices
+        set freq = freq + 1
+        where uri = '%s'
+    ]], choice['uri']))
+    if err ~= 0 then
+        error('error updating device freq: ' .. createDevice.db:errmsg())
     end
 
-    hs.json.write(createDevice.freqData, createDevice.freqFile, true, true)
     createDevice:refresh()
 end
 
@@ -77,18 +93,103 @@ end
 -- Sorts the device table using the frequency data from createDevice.freqData
 -- Writes the list of devices to createDevice.dataFile
 function createDevice:refresh()
+    local sortedData = {}
+    for row in createDevice.db:nrows([[
+    select
+        uri,
+        chooser_text as text,
+        chooser_subtext as subText,
+        freq
+    from devices
+    order by freq desc
+    ]]) do
+        table.insert(sortedData, row)
+    end
+
+    createDevice.chooser:choices(sortedData)
+end
+
+function createDevice:buildList()
     createDevice.deviceData = hs.json.read(createDevice.dataFile)
-    table.sort(createDevice.deviceData, function(left, right)
-        if createDevice.freqData[left['text']] == nil then
-            createDevice.freqData[left['text']] = 0
+    createDevice:batchInsert(createDevice.deviceData)
+    createDevice:refresh()
+end
+
+function createDevice:batchInsert(objects, batchSize)
+    if #objects == 0 then return end
+    batchSize = batchSize or 1000
+
+    local columns = {}
+    for key, _ in pairs(objects[1]) do
+        colName = key
+        if colName == 'text' then
+            colName = 'chooser_text'
+        elseif colName == 'subText' then
+            colName = 'chooser_subtext'
         end
-        if createDevice.freqData[right['text']] == nil then
-            createDevice.freqData[right['text']] = 0
+        table.insert(columns, colName)
+    end
+
+    local placeholders = table.concat(table.rep({ '?' }, #columns), ',')
+    local insertSQL = string.format(
+        'insert or replace into devices (%s) values (%s)',
+        table.concat(columns, ', '),
+        placeholders
+    )
+
+    local stmt = createDevice.db:prepare(insertSQL)
+    if not stmt then
+        error('failed to prepare statement: ' .. createDevice.db:errmsg())
+    end
+
+    local count = 0
+    createDevice.db:exec('begin transaction')
+
+    for _, obj in ipairs(objects) do
+        local values = {}
+        for _, col in ipairs(columns) do
+            colName = col
+            if colName == 'chooser_text' then
+                colName = 'text'
+            elseif colName == 'chooser_subtext' then
+                colName = 'subText'
+            end
+            local value = obj[colName]
+            table.insert(values, value)
         end
-        return createDevice.freqData[left['text']] > createDevice.freqData[right['text']]
-    end)
-    hs.json.write(createDevice.deviceData, createDevice.dataFile, true, true)
-    createDevice.chooser:choices(createDevice.deviceData)
+
+        stmt:bind_values(table.unpack(values))
+        local result = stmt:step()
+
+        if result ~= hs.sqlite3.DONE then
+            stmt:finalize()
+            createDevice.db:exec('rollback')
+            error('failed to insert record: ' .. createDevice.db:errmsg())
+        end
+
+        stmt:reset()
+        count = count + 1
+
+        if count % batchSize == 0 then
+            createDevice.db:exec('commit')
+            createDevice.db:exec('begin transaction')
+            print(string.format('inserted %d records', count))
+        end
+    end
+
+    createDevice.db:exec('commit')
+    stmt:finalize()
+    print(string.format('total records inserted: %d', count))
+end
+
+function table.rep(tbl, n)
+    local result = {}
+    for i = 1, n do
+        for _, v in ipairs(tbl) do
+            table.insert(result, v)
+        end
+    end
+    return result
 end
 
 return createDevice

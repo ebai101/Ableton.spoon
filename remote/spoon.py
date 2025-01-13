@@ -3,7 +3,6 @@ from __future__ import absolute_import, print_function, unicode_literals
 import json
 import logging
 import os
-from urllib.parse import unquote
 
 from ableton.v3.control_surface import ControlSurface, ControlSurfaceSpecification
 
@@ -23,37 +22,37 @@ class Spoon(ControlSurface):
         self.log_level = "info"
         super().__init__(c_instance=c_instance, specification=Specification)
 
-    def walk_plugins(self):
-        plugins = self.application.browser.plugins
-        plugin_data = {}  # uri[plugin_instance]
+    def walk_devices(self):
+        data = {}  # uri[(plugin_instance, path)]
 
-        def _walk(item):
-            for i in item.iter_children:
-                if i.is_folder:
-                    _walk(i)
-                else:
-                    plugin_data[i.uri] = i
+        def _walk(item, current_path):
+            if item.is_loadable:
+                data[item.uri] = (item, current_path[:])
+            next_path = current_path + [item.name] if item.is_folder else current_path
+            for child in item.iter_children:
+                _walk(child, next_path)
 
-        _walk(plugins)
-        return plugin_data
+        _walk(self.application.browser.plugins, [])
+        _walk(self.application.browser.audio_effects, ["Audio Effects"])
+        _walk(self.application.browser.instruments, ["Instruments"])
+        _walk(self.application.browser.midi_effects, ["MIDI Effects"])
+
+        return data
 
     def dump_plugin_list(self):
         module_path = os.path.dirname(os.path.realpath(__file__))
         data_dir = os.path.join(module_path, "data")
         if not os.path.exists(data_dir):
             os.mkdir(data_dir, 0o755)
-        plugin_data_path = os.path.join(data_dir, "plugins.json")
+        device_data_path = os.path.join(data_dir, "devices.json")
 
-        plugin_list = []
-        for uri, plug in self.plugins.items():
-            subtext = unquote(uri).replace("query:Plugins#", "").split(":")
-            subtext.pop()
-            subtext_str = " - ".join(subtext)
+        device_list = []
+        for uri, plug in self.devices.items():
+            subtext = " - ".join(plug[1])
+            device_list.append({"uri": uri, "text": plug[0].name, "subText": subtext})
 
-            plugin_list.append({"uri": uri, "text": plug.name, "subText": subtext_str})
-
-        with open(plugin_data_path, "w") as f:
-            f.write(json.dumps(plugin_list))
+        with open(device_data_path, "w") as f:
+            f.write(json.dumps(device_list))
 
     def init_api(self):
         with self.component_guard():
@@ -83,7 +82,7 @@ class Spoon(ControlSurface):
 
             self.schedule_message(0, self.tick)
 
-            self.plugins = self.walk_plugins()
+            self.devices = self.walk_devices()
             self.dump_plugin_list()
             self.init_api()
 
