@@ -22,22 +22,6 @@ end
 -- eventtaps --
 -----------
 
--- mouse.eventtaps.middleMouseDragged = hs.eventtap.new(
---     { hs.eventtap.event.types.otherMouseDragged }, function(event)
---         local buttonNumber = tonumber(hs.inspect(event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber)))
---         if buttonNumber == 2 then
---             local scroll = -1
---             local point = hs.mouse.absolutePosition()
---             local dx = event:getProperty(hs.eventtap.event.properties.mouseEventDeltaX)
---             local dy = event:getProperty(hs.eventtap.event.properties.mouseEventDeltaY)
---             local scrollEvent = hs.eventtap.event.newScrollEvent({ dx * scroll, dy * scroll }, {}, 'pixel')
---             hs.mouse.absolutePosition(point)
---             return true, { scrollEvent }
---         else
---             return false, {}
---         end
---     end)
-
 mouse.eventtaps.mouse4Disable = hs.eventtap.new(
     { hs.eventtap.event.types.otherMouseUp }, function(event)
         local buttonNumber = tonumber(hs.inspect(event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber)))
