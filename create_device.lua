@@ -6,6 +6,9 @@ createDevice.hotkeys = {}
 createDevice.dataFile = '~/Music/Ableton/User Library/Remote Scripts/AAAremote/data/devices.json'
 createDevice.freqFile = 'abcd_freq_data.db'
 
+createDevice.insertStmt = nil
+createDevice.updateFreqStmt = nil
+
 local FZY_WEIGHT = 0.6
 local FREQ_WEIGHT = 0.4
 
@@ -27,6 +30,23 @@ function createDevice:start()
     createDevice:refresh()
 end
 
+function createDevice:stop()
+    if self.insertStmt then
+        self.insertStmt:finalize()
+        self.insertStmt = nil
+    end
+
+    if self.updateFreqStmt then
+        self.updateFreqStmt:finalize()
+        self.updateFreqStmt = nil
+    end
+
+    if self.db then
+        self.db:close()
+        self.db = nil
+    end
+end
+
 function createDevice:bindHotkeys(maps)
     table.insert(createDevice.hotkeys, hs.hotkey.new(maps.createDevice[1], maps.createDevice[2], createDevice.show))
 end
@@ -43,6 +63,7 @@ end
 function createDevice:initDb()
     createDevice.db = hs.sqlite3.open(createDevice.freqFile)
 
+    -- schema
     local res = createDevice.db:exec [=[
         create table if not exists devices (
             id integer primary key,
@@ -54,7 +75,48 @@ function createDevice:initDb()
         );
     ]=]
     if res ~= hs.sqlite3.OK then
-        print('error creating table: ' .. createDevice.db:errmsg())
+        error('error creating table: ' .. createDevice.db:errmsg())
+    end
+
+    -- indexes
+    local indexes = {
+        'create index if not exists idx_devices_uri on devices(uri);',
+        'create index if not exists idx_devices_freq on devices(freq);',
+        'create index if not exists idx_devices_is_preset on devices(is_preset);',
+        'create index if not exists idx_devices_preset_freq on devices(is_preset, freq desc);',
+    }
+    for _, idx in ipairs(indexes) do
+        res = createDevice.db:exec(idx)
+        if res ~= hs.sqlite3.OK then
+            print('error creating index: ' .. createDevice.db:errmsg())
+        end
+    end
+
+    -- insert statement
+    local columns = { 'uri', 'chooser_text', 'chooser_subtext', 'freq', 'is_preset' }
+    local insertSQL = string.format([[
+        insert or replace into devices
+            (%s)
+        values
+            (?, ?, ?,
+            coalesce((select freq from devices where uri = ?), ?),
+            ?)
+        ]],
+        table.concat(columns, ', ')
+    )
+    createDevice.insertStmt = createDevice.db:prepare(insertSQL)
+    if not createDevice.insertStmt then
+        error('failed to prepare insert statement: ' .. createDevice.db:errmsg())
+    end
+
+    -- update freq statement
+    createDevice.updateFreqStmt = createDevice.db:prepare([[
+        update devices
+        set freq = freq + 1
+        where uri = ?
+    ]])
+    if not createDevice.updateFreqStmt then
+        error('failed to prepare update freq statement: ' .. createDevice.db:errmsg())
     end
 end
 
@@ -78,15 +140,12 @@ function createDevice:select(choice)
     createDevice.socket:send(string.format('create_plugin %s', choice['uri']), '0.0.0.0', 42069)
 
 
-    local err = createDevice.db:exec(string.format([[
-        update devices
-        set freq = freq + 1
-        where uri = '%s'
-    ]], choice['uri']))
-    if err ~= 0 then
+    createDevice.updateFreqStmt:bind_values(choice['uri'])
+    local result = createDevice.updateFreqStmt:step()
+    if result ~= hs.sqlite3.DONE then
         error('error updating device freq: ' .. createDevice.db:errmsg())
     end
-
+    createDevice.updateFreqStmt:reset()
     createDevice:refresh()
 end
 
@@ -143,44 +202,34 @@ end
 
 function createDevice:batchInsert(objects, batchSize)
     if #objects == 0 then return end
-    batchSize = batchSize or 1000
+    batchSize = batchSize or 500
 
-    local columns = {}
-    for key, _ in pairs(objects[1]) do
-        table.insert(columns, key)
-    end
-
-    local placeholders = table.concat(table.rep({ '?' }, #columns), ',')
-    local insertSQL = string.format(
-        'insert or replace into devices (%s) values (%s)',
-        table.concat(columns, ', '),
-        placeholders
-    )
-
-    local stmt = createDevice.db:prepare(insertSQL)
-    if not stmt then
-        error('failed to prepare statement: ' .. createDevice.db:errmsg())
+    if not createDevice.insertStmt then
+        error('insert statement not prepared - was initDb called?')
     end
 
     local count = 0
     createDevice.db:exec('begin transaction')
 
     for _, obj in ipairs(objects) do
-        local values = {}
-        for _, col in ipairs(columns) do
-            table.insert(values, obj[col])
-        end
+        local values = {
+            obj.uri, -- main uri insert
+            obj.chooser_text,
+            obj.chooser_subtext,
+            obj.uri, -- coalesce subquery
+            obj.freq or 0,
+            obj.is_preset
+        }
 
-        stmt:bind_values(table.unpack(values))
-        local result = stmt:step()
+        createDevice.insertStmt:bind_values(table.unpack(values))
+        local result = createDevice.insertStmt:step()
 
         if result ~= hs.sqlite3.DONE then
-            stmt:finalize()
             createDevice.db:exec('rollback')
             error('failed to insert record: ' .. createDevice.db:errmsg())
         end
 
-        stmt:reset()
+        createDevice.insertStmt:reset()
         count = count + 1
 
         if count % batchSize == 0 then
@@ -191,18 +240,7 @@ function createDevice:batchInsert(objects, batchSize)
     end
 
     createDevice.db:exec('commit')
-    stmt:finalize()
     print(string.format('total records inserted: %d', count))
-end
-
-function table.rep(tbl, n)
-    local result = {}
-    for i = 1, n do
-        for _, v in ipairs(tbl) do
-            table.insert(result, v)
-        end
-    end
-    return result
 end
 
 return createDevice

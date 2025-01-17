@@ -47,6 +47,7 @@ end
 
 function ableton:stop()
     ableton.watcher:stop()
+    ableton.create_device:stop()
 end
 
 function ableton:bindHotkeys(maps)
