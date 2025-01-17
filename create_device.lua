@@ -11,6 +11,8 @@ createDevice.updateFreqStmt = nil
 
 local FZY_WEIGHT = 0.6
 local FREQ_WEIGHT = 0.4
+local QUERY_DELAY_SEC = 0.05
+local NANOS_PER_SEC = 1000000000
 
 -----------
 -- setup --
@@ -22,10 +24,20 @@ function createDevice:start()
     self.chooser = hs.chooser.new(function(choice)
         return self:select(choice)
     end):queryChangedCallback(function()
-        return self:queryChanged()
+        local now = hs.timer.absoluteTime()
+        if now - self.queryChangedTime < (QUERY_DELAY_SEC * NANOS_PER_SEC) then
+            local wait = ((QUERY_DELAY_SEC * NANOS_PER_SEC) - (now - self.queryChangedTime)) / NANOS_PER_SEC
+            print('waiting ' .. wait .. ' sec')
+            hs.timer.doAfter(wait, hs.fnutils.partial(self.queryChanged, self))
+        else
+            self:queryChanged()
+        end
+        self.queryChangedTime = hs.timer.absoluteTime()
     end)
 
     self.socket = hs.socket.udp.new()
+
+    self.queryChangedTime = hs.timer.absoluteTime()
 
     self:refresh()
 end
@@ -82,6 +94,14 @@ function createDevice:initDb()
         error('error creating table: ' .. self.db:errmsg())
     end
 
+    -- performance optimizations
+    self.db:exec([[
+        PRAGMA synchronous = OFF;
+        PRAGMA journal_mode = MEMORY;
+        PRAGMA temp_store = MEMORY;
+        PRAGMA cache_size = -2000;
+    ]])
+
     -- indexes
     local indexes = {
         'create index if not exists idx_devices_uri on devices(uri);',
@@ -130,8 +150,12 @@ end
 
 function createDevice:show()
     if self.chooser:isVisible() then
+        print('starting')
+        local start = hs.timer.absoluteTime()
         self:buildList()
         hs.alert('rebuilt device list')
+        local elapsed = hs.timer.absoluteTime() - start
+        print('insert took ' .. elapsed / 1000000 .. ' ms')
     else
         self.chooser:show()
     end
@@ -200,8 +224,66 @@ function createDevice:queryChanged()
 end
 
 function createDevice:buildList()
-    self:batchInsert(hs.json.read(self.dataFile))
+    local jsonData = hs.json.read(self.dataFile)
+    self:fastBatchInsertTemp(jsonData)
     self:refresh()
+end
+
+function createDevice:fastBatchInsertTemp(objects)
+    if #objects == 0 then return end
+
+    self.db:exec('begin transaction')
+
+    -- Create temporary table
+    self.db:exec([[
+        create temporary table if not exists temp_devices (
+            uri text primary key,
+            chooser_text text not null,
+            chooser_subtext text,
+            new_freq integer default 0,
+            is_preset boolean not null
+        ) without rowid
+    ]])
+
+    -- Prepare temp insert statement
+    local tempInsert = self.db:prepare([[
+        insert into temp_devices
+            (uri, chooser_text, chooser_subtext, new_freq, is_preset)
+        values (?, ?, ?, ?, ?)
+    ]])
+
+    -- Insert all records into temp table
+    for _, obj in ipairs(objects) do
+        tempInsert:bind_values(
+            obj.uri,
+            obj.chooser_text,
+            obj.chooser_subtext,
+            obj.freq or 0,
+            obj.is_preset
+        )
+        tempInsert:step()
+        tempInsert:reset()
+    end
+
+    tempInsert:finalize()
+
+    -- Merge temp table into main table, preserving frequencies
+    self.db:exec([[
+        insert or replace into devices
+            (uri, chooser_text, chooser_subtext, freq, is_preset)
+        select
+            t.uri,
+            t.chooser_text,
+            t.chooser_subtext,
+            coalesce(d.freq, t.new_freq),
+            t.is_preset
+        from temp_devices t
+        left join devices d on d.uri = t.uri
+    ]])
+
+    -- Clean up
+    self.db:exec('drop table temp_devices')
+    self.db:exec('commit')
 end
 
 function createDevice:batchInsert(objects, batchSize)

@@ -1,5 +1,7 @@
 #!/usr/bin/env zsh
 
+trap kill_ableton INT
+
 run_remote() {
     rm -rf ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote
     cp -r remote ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote
@@ -28,6 +30,10 @@ less_ableton_log() {
 
 less_remote_log() {
     less ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote/logs/remote.log
+}
+
+kill_ableton() {
+    osascript -e 'tell application "Live" to quit'
 }
 
 case "$1" in

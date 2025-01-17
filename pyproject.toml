@@ -3,11 +3,12 @@ name = "remote"
 version = "0.1.0"
 description = "Ableton.spoon remote server"
 readme = "README.md"
-requires-python = "3.11.6"
+requires-python = "==3.11.6"
 dependencies = []
 
 [tool.basedpyright]
 typeCheckingMode = "standard"
 extraPaths = [
-    "/Users/ethan/dev/AbletonLive12_MIDIRemoteScripts"
+    "/Users/ethan/dev/AbletonLive12_MIDIRemoteScripts",
+    # "/Users/ethan/dev/LiveAPI_MakeDoc/build/12.1.5"
 ]
