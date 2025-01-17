@@ -14,22 +14,7 @@ local FREQ_WEIGHT = 0.4
 -----------
 
 function createDevice:start()
-    createDevice.db = hs.sqlite3.open(createDevice.freqFile)
-    local res = createDevice.db:exec [=[
-        create table if not exists devices (
-            id integer primary key,
-            uri text unique not null,
-            chooser_text text not null,
-            chooser_subtext text,
-            freq integer default 0,
-            is_preset boolean not null
-        );
-    ]=]
-    if res ~= hs.sqlite3.OK then
-        print('error creating table: ' .. createDevice.db:errmsg())
-    end
-
-    print(hs.inspect(fzy))
+    createDevice:initDb()
 
     createDevice.chooser = hs.chooser.new(function(choice)
         return createDevice:select(choice)
@@ -53,6 +38,24 @@ end
 
 function createDevice:deactivate()
     for _, v in pairs(createDevice.hotkeys) do v:disable() end
+end
+
+function createDevice:initDb()
+    createDevice.db = hs.sqlite3.open(createDevice.freqFile)
+
+    local res = createDevice.db:exec [=[
+        create table if not exists devices (
+            id integer primary key,
+            uri text unique not null,
+            chooser_text text not null,
+            chooser_subtext text,
+            freq integer default 0,
+            is_preset boolean not null
+        );
+    ]=]
+    if res ~= hs.sqlite3.OK then
+        print('error creating table: ' .. createDevice.db:errmsg())
+    end
 end
 
 --------------------
