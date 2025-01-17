@@ -23,7 +23,7 @@ class Spoon(ControlSurface):
         super().__init__(c_instance=c_instance, specification=Specification)
 
     def walk_devices(self):
-        data = {}  # uri[(plugin_instance, path)]
+        data = {}  # uri[(device, path)]
 
         def _walk(item, current_path):
             if item.is_loadable:
@@ -37,9 +37,12 @@ class Spoon(ControlSurface):
         _walk(self.application.browser.instruments, ["Instruments"])
         _walk(self.application.browser.midi_effects, ["MIDI Effects"])
 
+        # for some reason will crash on startup if we index M4L devices
+        # _walk(self.application.browser.max_for_live, ["Max for Live"])
+
         return data
 
-    def dump_plugin_list(self):
+    def dump_device_list(self):
         module_path = os.path.dirname(os.path.realpath(__file__))
         data_dir = os.path.join(module_path, "data")
         if not os.path.exists(data_dir):
@@ -47,9 +50,17 @@ class Spoon(ControlSurface):
         device_data_path = os.path.join(data_dir, "devices.json")
 
         device_list = []
-        for uri, plug in self.devices.items():
-            subtext = " - ".join(plug[1])
-            device_list.append({"uri": uri, "text": plug[0].name, "subText": subtext})
+        for uri, dev in self.devices.items():
+            subtext = " - ".join(dev[1])
+            is_preset = "FileId" in uri
+            device_list.append(
+                {
+                    "uri": uri,
+                    "chooser_text": dev[0].name,
+                    "chooser_subtext": subtext,
+                    "is_preset": is_preset,
+                }
+            )
 
         with open(device_data_path, "w") as f:
             f.write(json.dumps(device_list))
@@ -83,7 +94,7 @@ class Spoon(ControlSurface):
             self.schedule_message(0, self.tick)
 
             self.devices = self.walk_devices()
-            self.dump_plugin_list()
+            self.dump_device_list()
             self.init_api()
 
             self.show_message(f"listening on port {RECV_PORT}")

@@ -1,9 +1,13 @@
 local createDevice = {}
 local log = hs.logger.new('createDev', 'debug')
+local fzy = dofile(hs.spoons.resourcePath('fzy.lua'))
 
 createDevice.hotkeys = {}
 createDevice.dataFile = '~/Music/Ableton/User Library/Remote Scripts/AAAremote/data/devices.json'
 createDevice.freqFile = 'abcd_freq_data.db'
+
+local FZY_WEIGHT = 0.6
+local FREQ_WEIGHT = 0.4
 
 -----------
 -- setup --
@@ -17,16 +21,22 @@ function createDevice:start()
             uri text unique not null,
             chooser_text text not null,
             chooser_subtext text,
-            freq integer default 0
-        )
+            freq integer default 0,
+            is_preset boolean not null
+        );
     ]=]
     if res ~= hs.sqlite3.OK then
         print('error creating table: ' .. createDevice.db:errmsg())
     end
 
+    print(hs.inspect(fzy))
+
     createDevice.chooser = hs.chooser.new(function(choice)
         return createDevice:select(choice)
+    end):queryChangedCallback(function()
+        return createDevice:queryChanged()
     end)
+
     createDevice.socket = hs.socket.udp.new()
 
     createDevice:refresh()
@@ -49,10 +59,6 @@ end
 -- implementation --
 --------------------
 
--- createDevice:show()
--- Method
--- Shows the device chooser
--- If the device chooser is already active (double press) then it calls createDevice:refresh()
 function createDevice:show()
     if createDevice.chooser:isVisible() then
         createDevice:buildList()
@@ -62,13 +68,6 @@ function createDevice:show()
     end
 end
 
--- createDevice:select(choice)
--- Method
--- Creates an instance of the selected device/preset
--- Writes the updated frequency data to createDevice.freqFile
---
--- Parameters:
--- * choice - A choice from the chooser's choices table
 function createDevice:select(choice)
     if not choice then return end
 
@@ -88,30 +87,54 @@ function createDevice:select(choice)
     createDevice:refresh()
 end
 
--- createDevice:refresh()
--- Method
--- Sorts the device table using the frequency data from createDevice.freqData
--- Writes the list of devices to createDevice.dataFile
 function createDevice:refresh()
-    local sortedData = {}
+    createDevice.deviceData = {}
     for row in createDevice.db:nrows([[
     select
         uri,
         chooser_text as text,
         chooser_subtext as subText,
-        freq
+        freq,
+        is_preset
     from devices
-    order by freq desc
+    order by
+        is_preset asc,
+        freq desc
     ]]) do
-        table.insert(sortedData, row)
+        table.insert(createDevice.deviceData, row)
     end
 
-    createDevice.chooser:choices(sortedData)
+    createDevice.chooser:choices(createDevice.deviceData)
+end
+
+function createDevice:queryChanged()
+    local query = createDevice.chooser:query()
+    if query == '' then
+        -- reset choices
+        createDevice.chooser:choices(createDevice.deviceData)
+        return
+    end
+
+    results = {}
+    for i = 1, #createDevice.deviceData do
+        local dev = createDevice.deviceData[i]
+        local line = dev['text']
+        if fzy.has_match(query, line) then
+            dev['score'] = fzy.score(query, line)
+            local logFreq = hs.math.log(dev['freq'] + 1) -- add 1 in case freq is 0
+            dev['weightedRank'] = (dev['score'] * FZY_WEIGHT) + (logFreq * FREQ_WEIGHT)
+            table.insert(results, dev)
+        end
+    end
+
+    table.sort(results, function(a, b)
+        return a['weightedRank'] > b['weightedRank']
+    end)
+    createDevice.chooser:choices(results)
 end
 
 function createDevice:buildList()
-    createDevice.deviceData = hs.json.read(createDevice.dataFile)
-    createDevice:batchInsert(createDevice.deviceData)
+    createDevice:batchInsert(hs.json.read(createDevice.dataFile))
     createDevice:refresh()
 end
 
@@ -121,13 +144,7 @@ function createDevice:batchInsert(objects, batchSize)
 
     local columns = {}
     for key, _ in pairs(objects[1]) do
-        colName = key
-        if colName == 'text' then
-            colName = 'chooser_text'
-        elseif colName == 'subText' then
-            colName = 'chooser_subtext'
-        end
-        table.insert(columns, colName)
+        table.insert(columns, key)
     end
 
     local placeholders = table.concat(table.rep({ '?' }, #columns), ',')
@@ -148,14 +165,7 @@ function createDevice:batchInsert(objects, batchSize)
     for _, obj in ipairs(objects) do
         local values = {}
         for _, col in ipairs(columns) do
-            colName = col
-            if colName == 'chooser_text' then
-                colName = 'text'
-            elseif colName == 'chooser_subtext' then
-                colName = 'subText'
-            end
-            local value = obj[colName]
-            table.insert(values, value)
+            table.insert(values, obj[col])
         end
 
         stmt:bind_values(table.unpack(values))
