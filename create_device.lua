@@ -17,17 +17,17 @@ local FREQ_WEIGHT = 0.4
 -----------
 
 function createDevice:start()
-    createDevice:initDb()
+    self:initDb()
 
-    createDevice.chooser = hs.chooser.new(function(choice)
-        return createDevice:select(choice)
+    self.chooser = hs.chooser.new(function(choice)
+        return self:select(choice)
     end):queryChangedCallback(function()
-        return createDevice:queryChanged()
+        return self:queryChanged()
     end)
 
-    createDevice.socket = hs.socket.udp.new()
+    self.socket = hs.socket.udp.new()
 
-    createDevice:refresh()
+    self:refresh()
 end
 
 function createDevice:stop()
@@ -48,23 +48,27 @@ function createDevice:stop()
 end
 
 function createDevice:bindHotkeys(maps)
-    table.insert(createDevice.hotkeys, hs.hotkey.new(maps.createDevice[1], maps.createDevice[2], createDevice.show))
+    table.insert(self.hotkeys, hs.hotkey.new(
+        maps.createDevice[1],
+        maps.createDevice[2],
+        hs.fnutils.partial(self.show, self)
+    ))
 end
 
 function createDevice:activate(app)
-    for _, v in pairs(createDevice.hotkeys) do v:enable() end
-    createDevice.app = app
+    for _, v in pairs(self.hotkeys) do v:enable() end
+    self.app = app
 end
 
 function createDevice:deactivate()
-    for _, v in pairs(createDevice.hotkeys) do v:disable() end
+    for _, v in pairs(self.hotkeys) do v:disable() end
 end
 
 function createDevice:initDb()
-    createDevice.db = hs.sqlite3.open(createDevice.freqFile)
+    self.db = hs.sqlite3.open(self.freqFile)
 
     -- schema
-    local res = createDevice.db:exec [=[
+    local res = self.db:exec [=[
         create table if not exists devices (
             id integer primary key,
             uri text unique not null,
@@ -75,7 +79,7 @@ function createDevice:initDb()
         );
     ]=]
     if res ~= hs.sqlite3.OK then
-        error('error creating table: ' .. createDevice.db:errmsg())
+        error('error creating table: ' .. self.db:errmsg())
     end
 
     -- indexes
@@ -86,9 +90,9 @@ function createDevice:initDb()
         'create index if not exists idx_devices_preset_freq on devices(is_preset, freq desc);',
     }
     for _, idx in ipairs(indexes) do
-        res = createDevice.db:exec(idx)
+        res = self.db:exec(idx)
         if res ~= hs.sqlite3.OK then
-            print('error creating index: ' .. createDevice.db:errmsg())
+            print('error creating index: ' .. self.db:errmsg())
         end
     end
 
@@ -104,19 +108,19 @@ function createDevice:initDb()
         ]],
         table.concat(columns, ', ')
     )
-    createDevice.insertStmt = createDevice.db:prepare(insertSQL)
-    if not createDevice.insertStmt then
-        error('failed to prepare insert statement: ' .. createDevice.db:errmsg())
+    self.insertStmt = self.db:prepare(insertSQL)
+    if not self.insertStmt then
+        error('failed to prepare insert statement: ' .. self.db:errmsg())
     end
 
     -- update freq statement
-    createDevice.updateFreqStmt = createDevice.db:prepare([[
+    self.updateFreqStmt = self.db:prepare([[
         update devices
         set freq = freq + 1
         where uri = ?
     ]])
-    if not createDevice.updateFreqStmt then
-        error('failed to prepare update freq statement: ' .. createDevice.db:errmsg())
+    if not self.updateFreqStmt then
+        error('failed to prepare update freq statement: ' .. self.db:errmsg())
     end
 end
 
@@ -125,11 +129,11 @@ end
 --------------------
 
 function createDevice:show()
-    if createDevice.chooser:isVisible() then
-        createDevice:buildList()
+    if self.chooser:isVisible() then
+        self:buildList()
         hs.alert('rebuilt device list')
     else
-        createDevice.chooser:show()
+        self.chooser:show()
     end
 end
 
@@ -137,21 +141,21 @@ function createDevice:select(choice)
     if not choice then return end
 
     log.d(string.format('selected %s', choice['text']))
-    createDevice.socket:send(string.format('create_plugin %s', choice['uri']), '0.0.0.0', 42069)
+    self.socket:send(string.format('create_plugin %s', choice['uri']), '0.0.0.0', 42069)
 
 
-    createDevice.updateFreqStmt:bind_values(choice['uri'])
-    local result = createDevice.updateFreqStmt:step()
+    self.updateFreqStmt:bind_values(choice['uri'])
+    local result = self.updateFreqStmt:step()
     if result ~= hs.sqlite3.DONE then
-        error('error updating device freq: ' .. createDevice.db:errmsg())
+        error('error updating device freq: ' .. self.db:errmsg())
     end
-    createDevice.updateFreqStmt:reset()
-    createDevice:refresh()
+    self.updateFreqStmt:reset()
+    self:refresh()
 end
 
 function createDevice:refresh()
-    createDevice.deviceData = {}
-    for row in createDevice.db:nrows([[
+    self.deviceData = {}
+    for row in self.db:nrows([[
     select
         uri,
         chooser_text as text,
@@ -163,23 +167,23 @@ function createDevice:refresh()
         is_preset asc,
         freq desc
     ]]) do
-        table.insert(createDevice.deviceData, row)
+        table.insert(self.deviceData, row)
     end
 
-    createDevice.chooser:choices(createDevice.deviceData)
+    self.chooser:choices(self.deviceData)
 end
 
 function createDevice:queryChanged()
-    local query = createDevice.chooser:query()
+    local query = self.chooser:query()
     if query == '' then
         -- reset choices
-        createDevice.chooser:choices(createDevice.deviceData)
+        self.chooser:choices(self.deviceData)
         return
     end
 
     results = {}
-    for i = 1, #createDevice.deviceData do
-        local dev = createDevice.deviceData[i]
+    for i = 1, #self.deviceData do
+        local dev = self.deviceData[i]
         local line = dev['text']
         if fzy.has_match(query, line) then
             dev['score'] = fzy.score(query, line)
@@ -192,24 +196,24 @@ function createDevice:queryChanged()
     table.sort(results, function(a, b)
         return a['weightedRank'] > b['weightedRank']
     end)
-    createDevice.chooser:choices(results)
+    self.chooser:choices(results)
 end
 
 function createDevice:buildList()
-    createDevice:batchInsert(hs.json.read(createDevice.dataFile))
-    createDevice:refresh()
+    self:batchInsert(hs.json.read(self.dataFile))
+    self:refresh()
 end
 
 function createDevice:batchInsert(objects, batchSize)
     if #objects == 0 then return end
     batchSize = batchSize or 500
 
-    if not createDevice.insertStmt then
+    if not self.insertStmt then
         error('insert statement not prepared - was initDb called?')
     end
 
     local count = 0
-    createDevice.db:exec('begin transaction')
+    self.db:exec('begin transaction')
 
     for _, obj in ipairs(objects) do
         local values = {
@@ -221,25 +225,25 @@ function createDevice:batchInsert(objects, batchSize)
             obj.is_preset
         }
 
-        createDevice.insertStmt:bind_values(table.unpack(values))
-        local result = createDevice.insertStmt:step()
+        self.insertStmt:bind_values(table.unpack(values))
+        local result = self.insertStmt:step()
 
         if result ~= hs.sqlite3.DONE then
-            createDevice.db:exec('rollback')
-            error('failed to insert record: ' .. createDevice.db:errmsg())
+            self.db:exec('rollback')
+            error('failed to insert record: ' .. self.db:errmsg())
         end
 
-        createDevice.insertStmt:reset()
+        self.insertStmt:reset()
         count = count + 1
 
         if count % batchSize == 0 then
-            createDevice.db:exec('commit')
-            createDevice.db:exec('begin transaction')
+            self.db:exec('commit')
+            self.db:exec('begin transaction')
             print(string.format('inserted %d records', count))
         end
     end
 
-    createDevice.db:exec('commit')
+    self.db:exec('commit')
     print(string.format('total records inserted: %d', count))
 end
 

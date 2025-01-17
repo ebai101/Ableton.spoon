@@ -23,49 +23,49 @@ ableton.defaultKeys = dofile(hs.spoons.resourcePath('default_keys.lua'))
 local log = hs.logger.new('ableton', 'debug')
 
 function ableton:start()
-    ableton.create_device:start()
+    self.create_device:start()
 
     local app = hs.application.frontmostApplication()
     if app:title() == 'Live' then
-        ableton:_activateAll(app)
+        self:_activateAll(app)
         log.d('ableton already at the front, automatically activating')
     end
 
-    ableton.watcher = hs.application.watcher.new(function(appName, eventType)
-        if appName == ableton.appName then
+    self.watcher = hs.application.watcher.new(function(appName, eventType)
+        if appName == self.appName then
             if eventType == hs.application.watcher.activated then
-                ableton:_activateAll(hs.appfinder.appFromName(appName))
+                self:_activateAll(hs.appfinder.appFromName(appName))
                 log.d('ableton activated')
             elseif eventType == hs.application.watcher.deactivated then
-                ableton:_deactivateAll()
+                self:_deactivateAll()
                 log.d('ableton deactivated')
             end
         end
     end)
-    ableton.watcher:start()
+    self.watcher:start()
 end
 
 function ableton:stop()
-    ableton.watcher:stop()
-    ableton.create_device:stop()
+    self.watcher:stop()
+    self.create_device:stop()
 end
 
 function ableton:bindHotkeys(maps)
-    maps = maps or ableton.defaultKeys
-    ableton.keyboard:bindHotkeys(maps)
-    ableton.create_device:bindHotkeys(maps)
+    maps = maps or self.defaultKeys
+    self.keyboard:bindHotkeys(maps)
+    self.create_device:bindHotkeys(maps)
 end
 
 function ableton:_activateAll(app)
-    ableton.mouse:activate(app)
-    ableton.keyboard:activate(app)
-    ableton.create_device:activate(app)
+    self.mouse:activate(app)
+    self.keyboard:activate(app)
+    self.create_device:activate(app)
 end
 
 function ableton:_deactivateAll()
-    ableton.mouse:deactivate()
-    ableton.keyboard:deactivate()
-    ableton.create_device:deactivate()
+    self.mouse:deactivate()
+    self.keyboard:deactivate()
+    self.create_device:deactivate()
 end
 
 return ableton

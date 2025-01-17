@@ -8,13 +8,13 @@ mouse.eventtaps = {}
 -----------
 
 function mouse:activate(app)
-    for _, v in pairs(mouse.eventtaps) do v:start() end
-    mouse.app = app
+    for _, v in pairs(self.eventtaps) do v:start() end
+    self.app = app
     log.d('mouse activated')
 end
 
 function mouse:deactivate()
-    for _, v in pairs(mouse.eventtaps) do v:stop() end
+    for _, v in pairs(self.eventtaps) do v:stop() end
     log.d('mouse deactivated')
 end
 
