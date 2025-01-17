@@ -4,13 +4,21 @@ import json
 import logging
 import os
 
-from ableton.v3.control_surface import ControlSurface, ControlSurfaceSpecification
+from ableton.v3.control_surface import (
+    ControlSurface,
+    ControlSurfaceSpecification,
+    ElementsBase,
+)
 
-from .elements import Elements
 from .handlers import Handlers
 from .server import RECV_PORT, Server
 
 logger = logging.getLogger("remote")
+
+
+class Elements(ElementsBase):
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
 
 
 class Specification(ControlSurfaceSpecification):

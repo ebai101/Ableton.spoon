@@ -24,8 +24,6 @@ class Handlers:
                 app.view.hide_view("Browser")
             else:
                 app.view.show_view("Browser")
-            # for view in app.view.available_main_views():
-            #     self.logger.info(view)
 
         self.server.add_handler("create_plugin", create_plugin)
         self.server.add_handler("toggle_browser", toggle_browser)
