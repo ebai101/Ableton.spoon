@@ -18,6 +18,7 @@ function keyboard:bindHotkeys(maps)
     table.insert(self.hotkeys, self:mixer(maps))
     table.insert(self.hotkeys, self:stop(maps))
     table.insert(self.hotkeys, self:groovePool(maps))
+    table.insert(self.hotkeys, self:search(maps))
 end
 
 function keyboard:activate(app)
@@ -89,6 +90,12 @@ end
 function keyboard:stop(m)
     return hs.hotkey.new(m.stop[1], m.stop[2], function()
         self.app:selectMenuItem({ 'Playback', 'Return Play Position to 1.1.1' })
+    end)
+end
+
+function keyboard:search(m)
+    return hs.hotkey.new(m.search[1], m.search[2], function()
+        self.app:selectMenuItem({ 'View', 'Search in Browser' })
     end)
 end
 

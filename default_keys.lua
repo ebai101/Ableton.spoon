@@ -1,5 +1,6 @@
 return {
-    createDevice = { { 'ctrl', 'cmd' }, 'f' },
+    createDevice = { { 'cmd' }, 'f' },
+    search = { { 'ctrl', 'cmd' }, 'f' },
     consolidate = { { 'ctrl' }, 'g' },
     insertMidiClip = { { 'ctrl' }, 'c' },
     selectLoop = { { 'alt' }, '`' },
