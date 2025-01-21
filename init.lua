@@ -16,7 +16,7 @@ ableton.license = 'MIT - https://opensource.org/licenses/MIT'
 ableton.appName = 'Live'
 ableton.mouse = dofile(hs.spoons.resourcePath('mouse.lua'))
 ableton.keyboard = dofile(hs.spoons.resourcePath('keyboard.lua'))
-ableton.create_device = dofile(hs.spoons.resourcePath('create_device.lua'))
+ableton.create_device = dofile(hs.spoons.resourcePath('create_device/create_device.lua'))
 ableton.defaultKeys = dofile(hs.spoons.resourcePath('default_keys.lua'))
 
 
