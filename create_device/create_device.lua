@@ -13,8 +13,8 @@ local FREQ_WEIGHT = 0.4
 -- setup --
 -----------
 
-function createDevice:start()
-    self.repo:init()
+function createDevice:start(socket)
+    self.repo:open()
 
     self.chooser = hs.chooser.new(function(choice)
         return self:select(choice)
@@ -22,26 +22,8 @@ function createDevice:start()
         self:queryChanged()
     end)
 
-    self.socket = hs.socket.udp.new()
-
+    self.socket = socket
     self:refresh()
-end
-
-function createDevice:stop()
-    if self.insertStmt then
-        self.insertStmt:finalize()
-        self.insertStmt = nil
-    end
-
-    if self.updateFreqStmt then
-        self.updateFreqStmt:finalize()
-        self.updateFreqStmt = nil
-    end
-
-    if self.db then
-        self.db:close()
-        self.db = nil
-    end
 end
 
 function createDevice:bindHotkeys(maps)
@@ -55,10 +37,12 @@ end
 function createDevice:activate(app)
     for _, v in pairs(self.hotkeys) do v:enable() end
     self.app = app
+    self.repo:open()
 end
 
 function createDevice:deactivate()
     for _, v in pairs(self.hotkeys) do v:disable() end
+    self.repo:close()
 end
 
 --------------------
@@ -82,7 +66,7 @@ function createDevice:select(choice)
     if not choice then return end
 
     log.d(string.format('selected %s', choice['text']))
-    self.socket:send(string.format('create_plugin %s', choice['uri']), '0.0.0.0', 42069)
+    self.socket:sendMessage(string.format('create_plugin %s', choice['uri']))
     self.repo:updateFreq(choice['uri'])
 
     self:refresh()

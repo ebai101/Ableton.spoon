@@ -2,10 +2,17 @@ local mouse = {}
 local log = hs.logger.new('mouse', 'debug')
 
 mouse.eventtaps = {}
+mouse.IGNORE = 9999
+mouse.panZoomCmdDown = false
+mouse.currentlyDrawing = false
 
 -----------
 -- setup --
 -----------
+
+function mouse:start(socket)
+    self.socket = socket
+end
 
 function mouse:activate(app)
     for _, v in pairs(self.eventtaps) do v:start() end
@@ -18,28 +25,37 @@ function mouse:deactivate()
     log.d('mouse deactivated')
 end
 
------------
+local function keyEvent(key, down)
+    hs.eventtap.event.newKeyEvent(key, down)
+        :setProperty(hs.eventtap.event.properties.eventSourceUserData, mouse.IGNORE)
+        :setFlags({})
+        :post()
+end
+
+---------------
 -- eventtaps --
------------
+---------------
 
 mouse.eventtaps.mouse4Disable = hs.eventtap.new(
     { hs.eventtap.event.types.otherMouseUp }, function(event)
         local buttonNumber = tonumber(hs.inspect(event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber)))
         if buttonNumber == 3 then
-            hs.eventtap.event.newKeyEvent('0', true):setFlags({}):post()
-            hs.eventtap.event.newKeyEvent('0', false):setFlags({}):post()
+            keyEvent('0', true)
+            keyEvent('0', false)
             log.d('mouse4 disable')
         end
-    end)
+    end
+)
 
 mouse.eventtaps.mouse5Delete = hs.eventtap.new(
     { hs.eventtap.event.types.otherMouseUp }, function(event)
         local buttonNumber = tonumber(hs.inspect(event:getProperty(hs.eventtap.event.properties.mouseEventButtonNumber)))
         if buttonNumber == 4 then
+            keyEvent('delete', true)
+            keyEvent('delete', false)
             log.d('mouse5 delete')
-            hs.eventtap.event.newKeyEvent('delete', true):setFlags({}):post()
-            hs.eventtap.event.newKeyEvent('delete', false):setFlags({}):post()
         end
-    end)
+    end
+)
 
 return mouse

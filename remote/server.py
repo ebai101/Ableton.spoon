@@ -5,26 +5,36 @@ import traceback
 from typing import Callable
 
 RECV_PORT = 42069
+SEND_PORT = 42070
 
 
 class Server:
-    def __init__(self, addr: tuple[str, int] = ("0.0.0.0", RECV_PORT)):
-        self.addr = addr
+    def __init__(
+        self,
+        local_addr: tuple[str, int] = ("0.0.0.0", RECV_PORT),
+        remote_addr: tuple[str, int] = ("127.0.0.1", SEND_PORT),
+    ):
+        self.local_addr = local_addr
+        self.remote_addr = remote_addr
 
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self._socket.setblocking(False)
-        self._socket.bind(self.addr)
+        self._socket.bind(self.local_addr)
         self._callbacks = {}
 
         self.logger = logging.getLogger("remote")
         self.logger.info(
-            "starting server (local %s, response port %d)",
-            str(self.addr),
-            self.addr[1],
+            "starting server (local %s, response %d)",
+            str(self.local_addr),
+            self.remote_addr[1],
         )
 
     def add_handler(self, cmd: str, handler: Callable):
         self._callbacks[cmd] = handler
+
+    def send_message(self, msg):
+        self.logger.info(f"sending msg {msg}")
+        self._socket.sendto(msg.encode(), self.remote_addr)
 
     def process_message(self, message):
         message = message.decode("utf-8").strip().split(" ", 1)

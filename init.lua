@@ -18,17 +18,22 @@ ableton.mouse = dofile(hs.spoons.resourcePath('mouse.lua'))
 ableton.keyboard = dofile(hs.spoons.resourcePath('keyboard.lua'))
 ableton.create_device = dofile(hs.spoons.resourcePath('create_device/create_device.lua'))
 ableton.defaultKeys = dofile(hs.spoons.resourcePath('default_keys.lua'))
+ableton.socket = dofile(hs.spoons.resourcePath('socket.lua')):init()
 
 
 local log = hs.logger.new('ableton', 'debug')
 
 function ableton:start()
-    self.create_device:start()
+    self.create_device:start(self.socket)
+    self.mouse:start(self.socket)
+    self.keyboard:start(self.socket)
 
     local app = hs.application.frontmostApplication()
     if app:title() == 'Live' then
         self:_activateAll(app)
         log.d('ableton already at the front, automatically activating')
+    else
+        self:_deactivateAll()
     end
 
     self.watcher = hs.application.watcher.new(function(appName, eventType)
@@ -43,11 +48,6 @@ function ableton:start()
         end
     end)
     self.watcher:start()
-end
-
-function ableton:stop()
-    self.watcher:stop()
-    self.create_device:stop()
 end
 
 function ableton:bindHotkeys(maps)

@@ -1,8 +1,16 @@
 local repo = {}
 
-repo.path = 'abcd_freq_data.db'
+local log = hs.logger.new('repo', 'debug')
 
-function repo:init()
+repo.path = 'abcd_freq_data.db'
+repo.connected = false
+
+function repo:open()
+    if self.connected then
+        log.d('repo already connected')
+        return
+    end
+
     self.db = hs.sqlite3.open(self.path)
 
     -- schema
@@ -67,6 +75,9 @@ function repo:init()
     if not self.updateFreqStmt then
         error('failed to prepare update freq statement: ' .. self.db:errmsg())
     end
+
+    self.connected = true
+    log.d('connected to repo at ' .. self.path)
 end
 
 function repo:getDevices()
@@ -169,6 +180,31 @@ function repo:updateFreq(uri)
         error('error updating device freq: ' .. self.db:errmsg())
     end
     self.updateFreqStmt:reset()
+end
+
+function repo:close()
+    if not self.connected then
+        log.d('repo already disconnected')
+        return
+    end
+
+    if self.insertStmt then
+        self.insertStmt:finalize()
+        self.insertStmt = nil
+    end
+
+    if self.updateFreqStmt then
+        self.updateFreqStmt:finalize()
+        self.updateFreqStmt = nil
+    end
+
+    if self.db then
+        self.db:close()
+        self.db = nil
+    end
+
+    self.connected = false
+    log.d('disconnected from repo')
 end
 
 return repo

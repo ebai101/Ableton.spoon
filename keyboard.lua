@@ -8,17 +8,18 @@ keyboard.socket = hs.socket.udp.new()
 -- setup --
 -----------
 
+function keyboard:start(socket)
+    self.socket = socket
+end
+
 function keyboard:bindHotkeys(maps)
-    table.insert(self.hotkeys, self:consolidate(maps))
-    table.insert(self.hotkeys, self:insertMidiClip(maps))
-    table.insert(self.hotkeys, self:selectLoop(maps))
-    table.insert(self.hotkeys, self:clipView(maps))
-    table.insert(self.hotkeys, self:deviceView(maps))
-    table.insert(self.hotkeys, self:browser(maps))
-    table.insert(self.hotkeys, self:mixer(maps))
-    table.insert(self.hotkeys, self:stop(maps))
-    table.insert(self.hotkeys, self:groovePool(maps))
-    table.insert(self.hotkeys, self:search(maps))
+    self:menukey(maps, 'consolidate', { 'Edit', 'Consolidate' })
+    self:menukey(maps, 'insertMidiClip', { 'Create', 'Insert Empty MIDI Clip' })
+    self:menukey(maps, 'browser', { 'View', 'Browser' })
+    self:menukey(maps, 'search', { 'View', 'Search in Browser' })
+    self:hotkey(maps, 'loopSelection', self.loopSelection)
+    self:hotkey(maps, 'closePluginWindows', self.closePluginWindows)
+    self:menukey(maps, 'playFromMarker', { 'Playback', 'Play From Insert Marker' })
 end
 
 function keyboard:activate(app)
@@ -32,71 +33,69 @@ function keyboard:deactivate()
     log.d('keyboard deactivated')
 end
 
+-- helper function for keybinds that just select a menu item
+function keyboard:menukey(maps, name, tbl)
+    table.insert(self.hotkeys, hs.hotkey.new(maps[name][1], maps[name][2], function()
+        self.app:selectMenuItem(tbl)
+        log.d(name)
+    end))
+end
+
+-- helper function for keybinds that have more complex logic
+function keyboard:hotkey(maps, name, func)
+    table.insert(self.hotkeys, hs.hotkey.new(maps[name][1], maps[name][2], hs.fnutils.partial(func, self)))
+end
+
+-- helper function for keybinds that send commands to the remote
+function keyboard:udpkey(maps, name, msg)
+    table.insert(self.hotkeys, hs.hotkey.new(maps[name][1], maps[name][2], function()
+        self.socket:sendMessage(msg)
+        log.d(msg)
+    end))
+end
+
 --------------
 -- keybinds --
 --------------
 
-function keyboard:consolidate(m)
-    return hs.hotkey.new(m.consolidate[1], m.consolidate[2], function()
-        self.app:selectMenuItem({ 'Edit', 'Consolidate' })
-        log.d('consolidate')
-    end)
+function keyboard:loopSelection()
+    local ok = self.app:selectMenuItem({ 'Edit', 'Loop Selection' })
+    if ok then
+        log.d('looping selection')
+        return
+    end
+
+    ok = self.app:selectMenuItem({ 'Edit', 'Select Loop' })
+    if ok then
+        log.d('selected loop')
+        return
+    end
 end
 
-function keyboard:insertMidiClip(m)
-    return hs.hotkey.new(m.insertMidiClip[1], m.insertMidiClip[2], function()
-        self.app:selectMenuItem({ 'Create', 'Insert Empty MIDI Clip' })
-    end)
-end
-
-function keyboard:selectLoop(m)
-    return hs.hotkey.new(m.selectLoop[1], m.selectLoop[2], function()
-        hs.eventtap.event.newKeyEvent({ 'cmd' }, 'l', true):post()
-        hs.eventtap.event.newKeyEvent({ 'cmd' }, 'l', false):post()
-    end)
-end
-
-function keyboard:clipView(m)
-    return hs.hotkey.new(m.clipView[1], m.clipView[2], function()
-        self.app:selectMenuItem({ 'View', 'Clip View' })
-    end)
-end
-
-function keyboard:deviceView(m)
-    return hs.hotkey.new(m.deviceView[1], m.deviceView[2], function()
+function keyboard:deviceView()
+    local menuItem = self.app:findMenuItem({ 'View', 'Device View' })
+    if menuItem.ticked then
         self.app:selectMenuItem({ 'View', 'Device View' })
-    end)
+    else
+        self.app:selectMenuItem({ 'Navigate', 'Device View' })
+    end
 end
 
-function keyboard:browser(m)
-    return hs.hotkey.new(m.browser[1], m.browser[2], function()
-        -- self.socket:send('toggle_browser', '0.0.0.0', 42069)
-        self.app:selectMenuItem({ 'View', 'Browser' })
-    end)
+function keyboard:clipView()
+    local ok = self.app:selectMenuItem({ 'View', 'Hide Clip View' })
+    if not ok then
+        self.app:selectMenuItem({ 'Navigate', 'Clip View' })
+    end
 end
 
-function keyboard:mixer(m)
-    return hs.hotkey.new(m.mixer[1], m.mixer[2], function()
-        self.app:selectMenuItem({ 'View', 'Mixer' })
-    end)
-end
-
-function keyboard:groovePool(m)
-    return hs.hotkey.new(m.groovePool[1], m.groovePool[2], function()
-        self.app:selectMenuItem({ 'View', 'Groove Pool' })
-    end)
-end
-
-function keyboard:stop(m)
-    return hs.hotkey.new(m.stop[1], m.stop[2], function()
-        self.app:selectMenuItem({ 'Playback', 'Return Play Position to 1.1.1' })
-    end)
-end
-
-function keyboard:search(m)
-    return hs.hotkey.new(m.search[1], m.search[2], function()
-        self.app:selectMenuItem({ 'View', 'Search in Browser' })
-    end)
+function keyboard:closePluginWindows()
+    local allWindows = self.app:allWindows()
+    local mainWindow = self.app:mainWindow()
+    for _, win in ipairs(allWindows) do
+        if win ~= mainWindow and not win:isStandard() then
+            win:close()
+        end
+    end
 end
 
 return keyboard

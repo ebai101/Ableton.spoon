@@ -106,7 +106,7 @@ class Spoon(ControlSurface):
             self.init_api()
 
             self.show_message(f"listening on port {RECV_PORT}")
-            logger.info(f"listening on addr {self.server.addr}")
+            logger.info(f"listening on addr {self.server.local_addr}")
         except OSError as msg:
             self.show_message(f"couldn't bind to port {RECV_PORT} ({msg})")
             logger.info(f"couldn't bind to port {RECV_PORT} ({msg})")

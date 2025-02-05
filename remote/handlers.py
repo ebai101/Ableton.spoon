@@ -25,5 +25,10 @@ class Handlers:
             else:
                 app.view.show_view("Browser")
 
+        def notify_draw_mode():
+            self.server.send_message(f"draw_mode {int(self.spoon.song.view.draw_mode)}")
+
         self.server.add_handler("create_plugin", create_plugin)
         self.server.add_handler("toggle_browser", toggle_browser)
+        # self.server.add_handler("open_instrument", open_instrument)
+        self.spoon.song.view.add_draw_mode_listener(notify_draw_mode)
