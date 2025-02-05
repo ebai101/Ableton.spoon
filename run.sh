@@ -3,8 +3,8 @@
 trap kill_ableton INT
 
 run_remote() {
-    rm -rf ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote
-    cp -r remote ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote
+    rm -rf ~/Music/Ableton/User\ Library/Remote\ Scripts/AbletonSpoonRemote
+    cp -r AbletonSpoonRemote ~/Music/Ableton/User\ Library/Remote\ Scripts/AbletonSpoonRemote
     open -a "Ableton Live 12 Suite"
 }
 
@@ -18,10 +18,10 @@ tail_ableton_log() {
 }
 
 tail_remote_log() {
-    until [ -f ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote/logs/remote.log ]; do 
+    until [ -f ~/Music/Ableton/User\ Library/Remote\ Scripts/AbletonSpoonRemote/logs/remote.log ]; do 
         sleep 1
     done
-    tail -f ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote/logs/remote.log
+    tail -f ~/Music/Ableton/User\ Library/Remote\ Scripts/AbletonSpoonRemote/logs/remote.log
 }
 
 less_ableton_log() {
@@ -29,7 +29,7 @@ less_ableton_log() {
 }
 
 less_remote_log() {
-    less ~/Music/Ableton/User\ Library/Remote\ Scripts/AAAremote/logs/remote.log
+    less ~/Music/Ableton/User\ Library/Remote\ Scripts/AbletonSpoonRemote/logs/remote.log
 }
 
 kill_ableton() {
