@@ -20,7 +20,8 @@ function repo:open()
             uri text unique not null,
             chooser_text text not null,
             chooser_subtext text,
-            is_preset boolean not null
+            is_preset boolean not null,
+            show_in_chooser boolean default (1) not null
         );
 
         create table if not exists frequencies (
@@ -92,6 +93,7 @@ function repo:getDevices()
         d.is_preset as isPreset
     from devices d
     left join frequencies f on f.uri = d.uri
+    where d.show_in_chooser = 1
     order by
         is_preset asc,
         freq desc
