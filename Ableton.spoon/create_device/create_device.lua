@@ -3,7 +3,7 @@ local log = hs.logger.new('createDev', 'debug')
 local fzy = dofile(hs.spoons.resourcePath('fzy.lua'))
 
 createDevice.hotkeys = {}
-createDevice.dataFile = '~/Music/Ableton/User Library/Remote Scripts/AAAremote/data/devices.json'
+createDevice.dataFile = '~/Music/Ableton/User Library/Remote Scripts/AbletonSpoonRemote/data/devices.json'
 createDevice.repo = dofile(hs.spoons.resourcePath('repo.lua'))
 
 local FZY_WEIGHT = 0.6
