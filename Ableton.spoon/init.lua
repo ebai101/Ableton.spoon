@@ -39,7 +39,7 @@ function ableton:start()
     self.watcher = hs.application.watcher.new(function(appName, eventType)
         if appName == self.appName then
             if eventType == hs.application.watcher.activated then
-                self:_activateAll(hs.appfinder.appFromName(appName))
+                self:_activateAll(hs.application.find(appName))
                 log.d('ableton activated')
             elseif eventType == hs.application.watcher.deactivated then
                 self:_deactivateAll()
