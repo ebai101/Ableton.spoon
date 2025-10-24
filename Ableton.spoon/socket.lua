@@ -30,7 +30,7 @@ function socket:receiveMessage(data, sockaddr)
 end
 
 function socket:sendMessage(msg)
-    self._socket:send(msg, '0.0.0.0', SEND_PORT)
+    self._socket:send(msg, '127.0.0.1', SEND_PORT)
 end
 
 function socket:addHandler(msg, fn)
